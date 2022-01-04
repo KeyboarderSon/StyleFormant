@@ -14,6 +14,7 @@ def get_model(args, configs, device, train=False):
     if args.restore_step:
         ckpt_path = os.path.join(
             train_config["path"]["ckpt_path"],
+            
             "{}.pth.tar".format(args.restore_step),
         )
         ckpt = torch.load(ckpt_path)

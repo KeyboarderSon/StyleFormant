@@ -2,7 +2,7 @@ prenet:
   conv_kernel_size: 3
   dropout: 0.1
 
-transformer:
+SStransformer:
   encoder_layer: 4
   encoder_head: 2
   encoder_hidden: 256
@@ -15,7 +15,7 @@ transformer:
   decoder_dropout: 0.1
   generator_layer: 4
 
-formant_transformer:
+transformer:
   encoder_layer: 6
   encoder_head: 2
   encoder_hidden: 256

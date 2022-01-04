@@ -17,6 +17,12 @@ from evaluate import evaluate
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# def load_checkpoint(checkpoint, model, optimizer_main, optimizer_disc):
+#     print("=> Loading checkpoint")
+#     model.load_state_dict(checkpoint['model'])
+#     optimizer_main.load_state_dict(checkpoint['optimizer_main'])
+#     optimizer_disc.load_state_dict(checkpoint['optimizer_disc'])
+
 
 def backward(model, optimizer, total_loss, step, grad_acc_step, grad_clip_thresh):
     total_loss = total_loss / grad_acc_step
@@ -46,15 +52,23 @@ def main(args, configs):
         dataset,
         batch_size=batch_size * group_size,
         shuffle=True,
+        num_workers=2,
         collate_fn=dataset.collate_fn,
     )
 
     # Prepare model
     model, optimizer_main, optimizer_disc = get_model(args, configs, device, train=True)
+    
+    # load model!!!!!!!!
+    # load_checkpoint(torch.load(args.model_path), model, optimizer_main, optimizer_disc)
+
+    
     model = nn.DataParallel(model)
     num_param = get_param_num(model)
     MainLoss = StyleFormantLoss(preprocess_config, model_config, train_config).to(device)
     DiscLoss = MetaLossDisc(preprocess_config, model_config).to(device)
+
+    
     print("Number of StyleSpeech Parameters:", num_param)
 
     # Load vocoder
@@ -200,6 +214,7 @@ def main(args, configs):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--restore_step", type=int, default=0)
+    parser.add_argument("--model_path", type=str)
     parser.add_argument(
         "-p",
         "--preprocess_config",

@@ -62,7 +62,7 @@ class StyleFormant(nn.Module):
         output = self.encoder(texts, style_vector, src_masks)
         #### 얘를 해야하나 말아야 하나 ###
 
-        output = self.phoneme_linear(output)
+        #output = self.phoneme_linear(output)
 
 
         # Encoder
@@ -84,7 +84,7 @@ class StyleFormant(nn.Module):
             p_control, d_control
         )
 
-        #After mel_lens : 288
+
 
         #######
         formant_hidden = self.formant_generator(h, mel_masks)

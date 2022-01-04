@@ -2,5 +2,5 @@ montreal-forced-aligner
 preprocessed_data
 raw_data
 output
-slurmhalf2.out
-slurmhalf.out
+slurm*
+output*

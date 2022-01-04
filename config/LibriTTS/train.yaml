@@ -1,7 +1,7 @@
 path:
-  ckpt_path: "./output/ckpt/LibriTTS_meta_learner"
-  log_path: "./output/log/LibriTTS_meta_learner"
-  result_path: "./output/result/LibriTTS_meta_learner"
+  ckpt_path: "./output16/ckpt/LibriTTS_meta_learner"
+  log_path: "./output16/log/LibriTTS_meta_learner"
+  result_path: "./output16/result/LibriTTS_meta_learner"
 optimizer:
   batch_size: 16
   betas: [0.9, 0.98]
@@ -22,9 +22,9 @@ optimizer:
 #   val_step: 3
 #   save_step: 4
 step:
-  meta_learning_warmup: 60000
-  total_step: 100000
-  log_step: 50
-  synth_step: 500
-  val_step: 500
-  save_step: 10000
+  meta_learning_warmup: 80000
+  total_step: 120000
+  log_step: 100
+  synth_step: 20000
+  val_step: 5000
+  save_step: 20000
