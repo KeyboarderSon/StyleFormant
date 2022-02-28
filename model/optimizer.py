@@ -19,8 +19,8 @@ class ScheduledOptimMain:
         self.init_lr = np.power(model_config["transformer"]["encoder_hidden"], -0.5)#SS
         #self.init_lr = train_config["optimizer"]["init_lr"]#FPF
 
-        # meta_learning_warmup = train_config["step"]["meta_learning_warmup"]
-        self.current_step = current_step# if current_step <= meta_learning_warmup else current_step - meta_learning_warmup
+        meta_learning_warmup = train_config["step"]["meta_learning_warmup"]
+        self.current_step = current_step if current_step <= meta_learning_warmup else current_step - meta_learning_warmup
 
 
     def step_and_update_lr(self):
@@ -31,7 +31,8 @@ class ScheduledOptimMain:
         # print(self.init_lr)
         self._optimizer.zero_grad()
 
-    """SS
+    # SS
+    """
     def load_state_dict(self, state_dict):
         state_dict['param_groups'] = self._optimizer.state_dict()['param_groups']
         self._optimizer.load_state_dict(state_dict)

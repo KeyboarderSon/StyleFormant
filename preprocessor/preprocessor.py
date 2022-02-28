@@ -13,28 +13,20 @@ from tqdm import tqdm
 import audio as Audio
 
 """
-코드는 FastPitchFormant 중심.
-* FastPitchFormant에서는 Energy 관련 부분이 없다.
-* 우선 주석 처리로 StyleSpeech의 energy 부분을 넣어놓기는 했다.
-* 바로 밑 frame_level은 사용하지 않고 phoneme_level단만 사용한다.
+Focused on FastPitchFormant
+* use phoneme_level
 """
 class Preprocessor:
     def __init__(self, config):
         self.config = config
-        self.in_dir = config["path"]["raw_path"]#"./raw_data/LibriTTS"
-        self.out_dir = config["path"]["preprocessed_path"]#"./preprocessed_data/LibriTTS"
+        self.in_dir = config["path"]["raw_path"] # "./raw_data/LibriTTS"
+        self.out_dir = config["path"]["preprocessed_path"] # "./preprocessed_data/LibriTTS"
         self.val_size = config["preprocessing"]["val_size"]
         self.sampling_rate = config["preprocessing"]["audio"]["sampling_rate"]
         self.hop_length = config["preprocessing"]["stft"]["hop_length"]
 
         assert config["preprocessing"]["pitch"]["feature"] == "phoneme_level" # should be phoneme level
-        #assert config["preprocessing"]["pitch"]["feature"] in ["phoneme_level", "frame_level"] # SS
-        #assert config["preprocessing"]["energy"]["feature"] in ["phoneme_level", "frame_level"] # SS
-        
-        """FastPitchFormant는 Energy 부분이 없다?"""
-        # self.energy_phoneme_averaging = (
-        #     config["preprocessing"]["energy"]["feature"] == "phoneme_level"
-        # )
+
         self.pitch_phoneme_averaging = (
             config["preprocessing"]["pitch"]["feature"] == "phoneme_level"
         )
@@ -54,17 +46,13 @@ class Preprocessor:
     def build_from_path(self):
         os.makedirs((os.path.join(self.out_dir, "mel")), exist_ok=True)
         os.makedirs((os.path.join(self.out_dir, "pitch")), exist_ok=True)
-        # os.makedirs((os.path.join(self.out_dir, "energy")), exist_ok=True) # SS
         os.makedirs((os.path.join(self.out_dir, "duration")), exist_ok=True)
 
         print("Processing Data ...")
         out = list()
         n_frames = 0
-        # mel_min = float('inf')
-        # mel_max = -float('inf')
         pitch_scaler = StandardScaler()
-        # energy_scaler = StandardScaler()
-        
+         
         # Compute pitch, duration, and mel-spectrogram
         speakers = {}
 
@@ -79,7 +67,7 @@ class Preprocessor:
 
                 tg_path = os.path.join(
                     self.out_dir, "TextGrid", speaker, "{}.TextGrid".format(basename)
-                )#chapter, 
+                )
                 
                 if os.path.exists(tg_path):
                     ret = self.process_utterance(speaker, chapter, basename)
@@ -146,12 +134,12 @@ class Preprocessor:
 
         return out
 
-    def process_utterance(self, speaker, chapter, basename): #chapter
+    def process_utterance(self, speaker, chapter, basename): 
         wav_path = os.path.join(self.in_dir, speaker, "{}.wav".format(basename))
         text_path = os.path.join(self.in_dir, speaker, "{}.lab".format(basename))
         tg_path = os.path.join(
             self.out_dir, "TextGrid", speaker,  "{}.TextGrid".format(basename)
-        )#chapter,
+        )
 
         # Get alignments
         textgrid = tgt.io.read_textgrid(tg_path)
@@ -187,7 +175,7 @@ class Preprocessor:
         # Compute mel-scale spectrogram and energy
         mel_spectrogram, _ = Audio.tools.get_mel_from_wav(wav, self.STFT)# SS _ is energy
         mel_spectrogram = mel_spectrogram[:, : sum(duration)]
-        # energy = energy[: sum(duration)]
+
 
         if self.pitch_phoneme_averaging:
             # perform linear interpolation
@@ -210,17 +198,6 @@ class Preprocessor:
                 pos += d
             pitch = pitch[: len(duration)]
 
-        # if self.energy_phoneme_averaging:
-        #     # Phoneme-level average
-        #     pos = 0
-        #     for i, d in enumerate(duration):
-        #         if d > 0:
-        #             energy[i] = np.mean(energy[pos : pos + d])
-        #         else:
-        #             energy[i] = 0
-        #         pos += d
-        #     energy = energy[: len(duration)]
-
 
         # Save files
         dur_filename = "{}-duration-{}.npy".format(speaker, basename)
@@ -228,9 +205,7 @@ class Preprocessor:
 
         pitch_filename = "{}-pitch-{}.npy".format(speaker, basename)
         np.save(os.path.join(self.out_dir, "pitch", pitch_filename), pitch)
-        
-        # energy_filename = "{}-energy-{}.npy".format(speaker, basename)
-        # np.save(os.path.join(self.out_dir, "energy", energy_filename), energy)
+
 
         mel_filename = "{}-mel-{}.npy".format(speaker, basename)
         np.save(os.path.join(self.out_dir, "mel", mel_filename), mel_spectrogram.T)
@@ -238,7 +213,6 @@ class Preprocessor:
         return (
             "|".join([basename, speaker, text, raw_text]),
             self.remove_outlier(pitch),
-            #self.remove_outlier(energy),
             #np.min(mel_spectrogram),
             #np.max(mel_spectrogram),
             mel_spectrogram.shape[1],

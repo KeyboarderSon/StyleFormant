@@ -18,7 +18,6 @@ class StyleFormant(nn.Module):
         self.variance_adaptor = VarianceAdaptor(preprocess_config, model_config)
         self.formant_generator = Generator(model_config)
         self.excitation_generator = Generator(model_config, query_projection=True)
-        #self.mel_decoder = MelDecoder(model_config)##두 generator을 넣어줄 수 있는... decoder
         self.decoder = Decoder(preprocess_config, model_config)
 
         # not in FPF
@@ -42,100 +41,52 @@ class StyleFormant(nn.Module):
             model_config["melencoder"]["encoder_hidden"]
         )
 
-    # output is Mel Spectrogram
-    # Decoder 부분 조금 수정해야겠다!!!!!!
-
-    # Mel Spectrogram 생성하는 제일 중요 모듈
-
+    # Generate Mel Spectrogram
     def G(
             self, style_vector,
             texts, src_masks,  
             mel_masks, max_mel_len,
             p_targets=None,
-            #e_targets=None,
             d_targets=None,
             p_control=1.0,
-            #e_control=1.0,
             d_control=1.0,
         ):
 
+        """ Encoder """
         output = self.encoder(texts, style_vector, src_masks)
-        #### 얘를 해야하나 말아야 하나 ###
-
-        #output = self.phoneme_linear(output)
+        # output = self.phoneme_linear(output)
 
 
-        # Encoder
 
 
-        # Variance Adaptor
-        # max(mel_len)은 ref audio에 관한 정보...
-        
+        """ Variance Adaptor """
+        # max_mel_len is about ref audio
         (
             h, p, \
             p_predictions, log_d_predictions, d_rounded, \
             mel_lens, mel_masks
         ) = self.variance_adaptor(
             output, \
-#            speaker_embedding, \
             style_vector,\
             src_masks, mel_masks, max_mel_len, \
             p_targets, d_targets, \
             p_control, d_control
         )
 
-
-
-        #######
         formant_hidden = self.formant_generator(h, mel_masks)
-        #######
-
-
+    
         excitation_hidden = self.excitation_generator(p, mel_masks, hidden_query=h)
 
-        # mel net 넣어보까..
 
+        """ Decoder """
         mel_iters, mel_masks = self.decoder(style_vector, formant_hidden, excitation_hidden, mel_masks)
-
         #mel_iters = self.mel_linear(mel_iters)
 
 
-        # (
-        #     output, p_predictions,
-        #     #e_predictions,
-        #     log_d_predictions,
-        #     d_rounded,
-        #     mel_lens,
-        #     mel_masks,
-        # ) = self.variance_adaptor(
-        #                             output,
-        #                             src_masks,
-        #                             mel_masks,
-        #                             max_mel_len,
-        #                             p_targets,
-        #                             #e_targets,
-        #                             d_targets,
-        #                             p_control,
-        #                             #e_control,
-        #                             d_control,
-        #                          )
-        # Decoder
-        # output, mel_masks = self.mel_decoder(output, style_vector, mel_masks)
-        # output = self.mel_linear(output)
 
-        # return (
-        #             output,
-        #             p_predictions,
-        #             #e_predictions,
-        #             log_d_predictions,
-        #             d_rounded,
-        #             mel_lens,
-        #             mel_masks,
-        #         )
         return (
             mel_iters, \
             p_predictions, log_d_predictions, d_rounded, \
-            #src_masks, mel_masks, #src_lens, 
             mel_lens, mel_masks
         )        
     
@@ -145,10 +96,8 @@ class StyleFormant(nn.Module):
         self, speakers, texts, src_lens, max_src_len, \
         mels=None, mel_lens=None, max_mel_len=None, \
         p_targets=None,
-        #e_targets=None,
         d_targets=None,
         p_control=1.0,
-        #e_control=1.0,
         d_control=1.0,
     ):
         src_masks = get_mask_from_lengths(src_lens, max_src_len)
@@ -164,17 +113,10 @@ class StyleFormant(nn.Module):
         ## FPF
         output = self.encoder(texts, style_vector, src_masks)
 
-        # speaker_embedding = None
-        # if self.speaker_emb is not None:
-        #     speaker_embedding = self.speaker_emb(speakers).unsqueeze(1).expand(-1, max_src_len, -1)
-        #     output = output + speaker_embedding
-        # w = style_vector.unsqueeze(1).expand(-1, max_src_len, -1)
-
 
         (
             mel_iters,
             p_predictions,
-            #e_predictions,
             log_d_predictions,
             d_rounded,
             mel_lens,
@@ -184,10 +126,8 @@ class StyleFormant(nn.Module):
             texts, src_masks,  
             mel_masks, max_mel_len,
             p_targets,
-            #e_targets,
             d_targets,
             p_control,
-            #e_control,
             d_control
         )
 
@@ -196,64 +136,6 @@ class StyleFormant(nn.Module):
             p_predictions, log_d_predictions, d_rounded,
             src_masks, mel_masks, src_lens, mel_lens
         )
-
-
-
-
-#         (
-#             h, p, \
-#             p_predictions, log_d_predictions, d_rounded, \
-#             mel_lens, mel_masks
-#         ) = self.variance_adaptor(
-#             output, \
-# #            speaker_embedding, \
-#             style_vector,\
-#             src_masks, mel_masks, max_mel_len, \
-#             p_targets, d_targets, \
-#             p_control, d_control
-#         )
-
-
-
-        # formant_hidden = self.formant_generator(h, mel_masks)
-        # excitation_hidden = self.excitation_generator(p, mel_masks, hidden_query=h)
-
-        # mel_iters, mel_masks = self.decoder(style_vector, formant_hidden, excitation_hidden, mel_masks)
-
-        
-
-        # ## StyleSpeech
-        # style_vector = self.mel_style_encoder(mels, mel_masks)
-
-        # (
-        #     output,
-        #     p_predictions,
-        #     #e_predictions,
-        #     log_d_predictions,
-        #     d_rounded,
-        #     mel_lens,
-        #     mel_masks,
-        # ) = self.G(
-        #     style_vector,
-        #     texts,
-        #     src_masks,  
-        #     mel_masks,
-        #     max_mel_len,
-        #     p_targets,
-        #     #e_targets,
-        #     d_targets,
-        #     p_control,
-        #     #e_control,
-        #     d_control,
-        # )
-
-        # return (
-        #     output, 
-        #     p_predictions,
-        #     #e_predictions,
-        #     log_d_predictions, d_rounded, \
-        #     src_masks, mel_masks, src_lens, mel_lens,
-        # )
 
 
     
@@ -267,7 +149,6 @@ class StyleFormant(nn.Module):
         mel_lens,
         max_mel_len,
         p_targets=None,
-        #e_targets=None,
         d_targets=None,
         raw_quary_texts=None,
         quary_texts=None,
@@ -275,7 +156,6 @@ class StyleFormant(nn.Module):
         max_quary_src_len=None,
         quary_d_targets=None,
         p_control=1.0,
-        #e_control=1.0,
         d_control=1.0,
     ):
         src_masks = get_mask_from_lengths(src_lens, max_src_len)
@@ -291,7 +171,6 @@ class StyleFormant(nn.Module):
         (
             output,
             _,
-#            _,
             _,
             d_rounded_adv,
             mel_lens_adv,
@@ -302,24 +181,20 @@ class StyleFormant(nn.Module):
             quary_src_masks,
             quary_mel_masks,
             max_quary_mel_len,
-            #None,
             None,
             quary_d_targets,
             p_control,
-            #e_control,
             d_control,
         )
 
 
         D_s = self.D_s(self.style_prototype, speakers, output[0], mel_masks_adv)
-        quary_texts = self.encoder.src_word_emb(quary_texts)######## encoder FPF 괜찮을까!!!!
-        #quary_texts = self.phoneme_encoder.src_word_emb(quary_texts)
+        quary_texts = self.encoder.src_word_emb(quary_texts)
         D_t = self.D_t(self.variance_adaptor.upsample, quary_texts, output[0], max(mel_lens_adv).item(), mel_masks_adv, d_rounded_adv)
 
         (
             G,
             p_predictions,
-#            e_predictions,
             log_d_predictions,
             d_rounded,
             mel_lens,
@@ -331,10 +206,8 @@ class StyleFormant(nn.Module):
             mel_masks,
             max_mel_len,
             p_targets,
-#            e_targets,
             d_targets,
             p_control,
-#            e_control,
             d_control,
         )
 
@@ -343,7 +216,6 @@ class StyleFormant(nn.Module):
             D_t,
             G,
             p_predictions,
-#            e_predictions,
             log_d_predictions,
             d_rounded,
             src_masks,
@@ -362,7 +234,6 @@ class StyleFormant(nn.Module):
         mel_lens,
         max_mel_len,
         p_targets=None,
-#        e_targets=None,
         d_targets=None,
         raw_quary_texts=None,
         quary_texts=None,
@@ -370,7 +241,6 @@ class StyleFormant(nn.Module):
         max_quary_src_len=None,
         quary_d_targets=None,
         p_control=1.0,
-#        e_control=1.0,
         d_control=1.0,
     ):
         src_masks = get_mask_from_lengths(src_lens, max_src_len)
@@ -386,7 +256,6 @@ class StyleFormant(nn.Module):
         (
             output,
             _,
-            #_,
             _,
             d_rounded_adv,
             mel_lens_adv,
@@ -397,23 +266,21 @@ class StyleFormant(nn.Module):
             quary_src_masks,
             quary_mel_masks,
             max_quary_mel_len,
-            # None,
             None,
             quary_d_targets,
             p_control,
-            # e_control,
             d_control,
         )
 
-        texts = self.encoder.src_word_emb(texts)#phoneme_encoder.src_word_emb(texts)
+        texts = self.encoder.src_word_emb(texts)
         D_t_s = self.D_t(self.variance_adaptor.upsample, texts, mels, max_mel_len, mel_masks, d_targets)
 
-        quary_texts = self.encoder.src_word_emb(quary_texts)#phoneme_encoder.src_word_emb(quary_texts)
+        quary_texts = self.encoder.src_word_emb(quary_texts)
         D_t_q = self.D_t(self.variance_adaptor.upsample, quary_texts, output[0], 
-                        max(mel_lens_adv).item(), mel_masks_adv, d_rounded_adv)### output
+                        max(mel_lens_adv).item(), mel_masks_adv, d_rounded_adv)
 
         D_s_s = self.D_s(self.style_prototype, speakers, mels, mel_masks)
-        D_s_q = self.D_s(self.style_prototype, speakers, output[0], mel_masks_adv)### output
+        D_s_q = self.D_s(self.style_prototype, speakers, output[0], mel_masks_adv)
 
         # Get Style Logit
         w = style_vector.squeeze() # [B, H]

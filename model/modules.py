@@ -75,8 +75,8 @@ class MelStyleEncoder(nn.Module):
             for _ in range(n_temporal_layer)
         ])
 
-        self.slf_attn_stack = nn.ModuleList([#StyleSpeech꺼겠고 layer_norm
-            MultiHeadAttention(n_slf_attn_head, d_melencoder, d_k, d_v, dropout=dropout)#, layer_norm=True)
+        self.slf_attn_stack = nn.ModuleList([
+            MultiHeadAttention(n_slf_attn_head, d_melencoder, d_k, d_v, dropout=dropout)
             for _ in range(n_slf_attn_layer)
         ])
 
@@ -111,76 +111,7 @@ class MelStyleEncoder(nn.Module):
 
         return enc_output
 
-#What's Difference between PhonemeEncoder and TextEncoder? style vector 유무
-# 우선 FFT Block이 SALNFFTBlock으로 들어간다.
-#FPF
-# StyleSpeech transformer config 적용됨 주의!!
-"""
-class TextEncoder(nn.Module):
-    # Text Encoder
 
-    def __init__(self, config):
-        super(TextEncoder, self).__init__()
-
-        n_position = config["max_seq_len"] + 1
-        n_src_vocab = len(symbols) + 1
-        d_word_vec = config["transformer"]["encoder_hidden"]
-        n_layers = config["transformer"]["encoder_layer"]
-        n_head = config["transformer"]["encoder_head"]
-        #d_w = config["melencoder"]["encoder_hidden"] # Only in StyleSpeech
-        d_k = d_v = config["transformer"]["encoder_hidden"] // config["transformer"]["encoder_head"]
-        d_model = config["transformer"]["encoder_hidden"]
-        d_inner = config["transformer"]["conv_filter_size"]
-        kernel_size = config["transformer"]["conv_kernel_size"]
-        dropout = config["transformer"]["encoder_dropout"]
-
-        self.max_seq_len = config["max_seq_len"]
-        self.d_model = d_model
-
-        self.src_word_emb = nn.Embedding(n_src_vocab, d_word_vec, padding_idx=0)
-
-        # not trainable
-        self.position_enc = nn.Parameter(
-            get_sinusoid_encoding_table(n_position, d_word_vec).unsqueeze(0), requires_grad = False
-        )
-
-        self.layer_stack = nn.ModuleList(
-            [
-                FFTBlock(d_model, n_head, d_k, d_v, d_inner, kernel_size, dropout=dropout)
-                for _ in range(n_layers)
-            ]
-        )
-
-    def forward(self, src_seq, mask, return_attns=False):
-
-        # batch_size : 문장 개수 ... max_len은 batch 만큼의 문장 중 최대 길이...
-        enc_slf_attn_list = []
-        batch_size, max_len = src_seq.shape[0], src_seq.shape[1]
-
-        # Prepare masks
-        slf_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1)
-        print("slf_attn_mask shape : ", slf_attn_mask.shape)
-
-        # Forward
-        # train과 inference를 나눈 듯
-        # 근데 왜 not training 쪽에 require=True가 들어가는거지?
-        if not self.training and src_seq.shape[1] > self.max_seq_len:
-            enc_output = self.src_word_emb(src_seq) + \
-                get_sinusoid_encoding_table(src_seq.shape[1], self.d_model)[:src_seq.shape[1], :].unsqueeze(0).expand(batch_size, -1, -1).to(src_seq.device)
-        else:
-            enc_output = self.src_word_emb(src_seq) + \
-                self.position_enc[:, :max_len, :].expand(batch_size, -1, -1)
-        
-        # FFT Block의 return : enc_output, enc_slf_attn이라고 아예 명시되어있음
-        for enc_layer in self.layer_stack:
-            enc_output, enc_slf_attn = enc_layer(enc_output, mask=mask, slf_attn_mask = slf_attn_mask)
-            
-            # FFT Block 거친 Attention의 output 열거
-            if return_attns:
-                enc_slf_attn_list += [enc_slf_attn]
-        
-        return enc_output
-"""
 
 class PhonemePreNet(nn.Module):
     def __init__(self, config):
@@ -206,8 +137,6 @@ class PhonemePreNet(nn.Module):
 
 
 class PhonemeEncoder(nn.Module):
-    """ Phoneme Encoder """
-
     def __init__(self, config):
         super(PhonemeEncoder, self).__init__()
 
@@ -216,7 +145,7 @@ class PhonemeEncoder(nn.Module):
         d_word_vec = config["transformer"]["encoder_hidden"]
         n_layers = config["transformer"]["encoder_layer"]
         n_head = config["transformer"]["encoder_head"]
-        d_w = config["melencoder"]["encoder_hidden"] # Only in StyleSpeech
+        d_w = config["melencoder"]["encoder_hidden"] # w is style vector
         d_k = d_v = config["transformer"]["encoder_hidden"] // config["transformer"]["encoder_head"]
         d_model = config["transformer"]["encoder_hidden"]
         d_inner = config["transformer"]["conv_filter_size"]
@@ -246,7 +175,6 @@ class PhonemeEncoder(nn.Module):
 
         # Prepare masks
         slf_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1)
-        #print("slf_attn_mask shape : ", slf_attn_mask.shape)
 
         # PreNet
         src_seq = self.phoneme_prenet(self.src_word_emb(src_seq), mask)
@@ -259,8 +187,9 @@ class PhonemeEncoder(nn.Module):
             enc_output = src_seq + \
                 self.position_enc[:, :max_len, :].expand(batch_size, -1, -1)
         
-        # FFT Block의 return : enc_output, enc_slf_attn
-        for enc_layer in self.layer_stack:# input으로 style vector인 w !!
+        # FFT Block return : enc_output, enc_slf_attn
+        for enc_layer in self.layer_stack:
+            # input으로 style vector w
             enc_output, enc_slf_attn = enc_layer(enc_output, w, mask=mask, slf_attn_mask = slf_attn_mask)
             
             if return_attns:
@@ -288,70 +217,9 @@ class MelPreNet(nn.Module):
             x = x.masked_fill(mask.unsqueeze(-1), 0)
         return x
 
-# StyleSpeech Decoder
-class MelDecoder(nn.Module):
-    """ MelDecoder """
-    def __init__(self, config):
-        super(MelDecoder, self).__init__()
 
-        n_position = config["max_seq_len"] + 1
-        d_word_vec = config["transformer"]["decoder_hidden"]
-        n_layers = config["transformer"]["decoder_layer"]
-        n_head = config["transformer"]["decoder_head"]
-        d_w = config["melencoder"]["encoder_hidden"]
-        d_k = d_v = config["transformer"]["decoder_hidden"] // config["transformer"]["decoder_head"]
-        d_model = config["transformer"]["decoder_hidden"]
-        d_inner = config["transformer"]["conv_filter_size"]
-        kernel_size = config["transformer"]["conv_kernel_size"]
-        dropout = config["transformer"]["decoder_dropout"]
 
-        self.max_seq_len = config["max_seq_len"]
-        self.d_model = d_model
-
-        self.mel_prenet = MelPreNet(config)
-        self.position_enc = nn.Parameter(
-            get_sinusoid_encoding_table(n_position, d_word_vec).unsqueeze(0), 
-            requires_grad=False,
-        )
-
-        self.layer_stack = nn.ModuleList([
-            SALNFFTBlock(d_model, d_w, n_head, d_k, d_v, d_inner, kernel_size, dropout=dropout)
-            for _ in range(n_layers)
-        ])
-
-    def forward(self, enc_seq, w, mask, return_attns=False):
-
-        dec_slf_attn_list = []
-        batch_size, max_len = enc_seq.shape[0], enc_seq.shape[1]
-
-        # -- PreNet
-        enc_seq = self.mel_prenet(enc_seq, mask)
-
-        # -- Forward
-        if not self.training and enc_seq.shape[1] > self.max_seq_len:
-            # -- Prepare masks
-            slf_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1)
-            dec_output = enc_seq + \
-                get_sinusoid_encoding_table(enc_seq.shape[1], self.d_model)[: enc_seq.shape[1], :].unsqueeze(0).expand(batch_size, -1, -1).to(enc_seq.device)
-        else:
-            max_len = min(max_len, self.max_seq_len)
-
-            # -- Prepare masks
-            slf_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1)
-            dec_output = enc_seq[:, :max_len, :] + self.position_enc[:, :max_len, :].expand(batch_size, -1, -1)
-            mask = mask[:, :max_len]
-            slf_attn_mask = slf_attn_mask[:, :, :max_len]
-
-        #layer_stack = FFTBlock
-        for dec_layer in self.layer_stack:
-            dec_output, dec_slf_attn = dec_layer(dec_output, w, mask=mask, slf_attn_mask=slf_attn_mask)
-            if return_attns:
-                dec_slf_attn_list += [dec_slf_attn]
-
-        return dec_output, mask
-
-# 아직 상세하게 보지는 못함
-# Style Vector 넣을 수 있게 수정 필요!!
+# FPF Decoder + Style vector
 class Decoder(nn.Module):
     """ Spectrogram Decoder With Iterative Mel Prediction """
     def __init__(self, preprocess_config, model_config):
@@ -360,7 +228,7 @@ class Decoder(nn.Module):
         n_mel_channels = preprocess_config["preprocessing"]["mel"]["n_mel_channels"]
         n_layers = model_config["transformer"]["decoder_layer"]
         n_head = model_config["transformer"]["decoder_head"]
-        d_w = model_config["melencoder"]["encoder_hidden"]############
+        d_w = model_config["melencoder"]["encoder_hidden"] # Add style vector
         d_k = d_v = (
             model_config["transformer"]["decoder_hidden"]
             // model_config["transformer"]["decoder_head"]
@@ -370,25 +238,24 @@ class Decoder(nn.Module):
         kernel_size = model_config["transformer"]["conv_kernel_size"]
         dropout = model_config["transformer"]["decoder_dropout"]
 
-        # SS와 FPF와 unmatch, SS의 것
-        n_position = model_config["max_seq_len"] + 1 # config
-        d_word_vec = model_config["transformer"]["decoder_hidden"] # config
+
+        n_position = model_config["max_seq_len"] + 1
+        d_word_vec = model_config["transformer"]["decoder_hidden"]
         
 
         self.n_mel_channels = n_mel_channels
         self.max_seq_len = model_config["max_seq_len"]
         self.d_model = d_model
 
-        # SS에서 사용
-        self.mel_prenet = MelPreNet(model_config) #config, 등판
-        self.position_enc = nn.Parameter( #등판
+        # in SS
+        self.mel_prenet = MelPreNet(model_config)
+        self.position_enc = nn.Parameter(
             get_sinusoid_encoding_table(n_position, d_word_vec).unsqueeze(0), requires_grad=False,
         )
 
         
         self.n_layers = n_layers
         self.layer_stack = nn.ModuleList([
-                #FFTBlock(d_model, n_head, d_k, d_v, d_inner, kernel_size, dropout=dropout)
                 SALNFFTBlock(d_model, d_w, n_head, d_k, d_v, d_inner, kernel_size, dropout=dropout)
                 for _ in range(n_layers)
         ])
@@ -399,8 +266,7 @@ class Decoder(nn.Module):
                 for _ in range(n_layers)
         ])
 
-    # FFTBlock에서 SALNFFTBlock으로 바꿔줌
-    # 그래서 w 추가 !!!!! Decoder base는 FPF
+
     def forward(self, w, formant_hidden, excitation_hidden, mask):
 
         mel_iters = list()
@@ -410,9 +276,9 @@ class Decoder(nn.Module):
         slf_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1)
 
         # -- FC 1
-        ## Formant, excitation 생성
+        ## Generate Formant, excitation 
         f_mel, e_mel = torch.split(
-            #########################
+
             self.fc_layer_1(torch.cat([formant_hidden, excitation_hidden], dim=-1)),
             self.n_mel_channels, dim=-1)
         mel_iters.append(f_mel + e_mel)
@@ -420,22 +286,12 @@ class Decoder(nn.Module):
         # -- FC 2, 3
         dec_output = formant_hidden + excitation_hidden
 
-        #layer_stack = FFTBlock
+        # layer_stack = FFTBlock
         for i, (dec_layer, linear) in enumerate(zip(self.layer_stack, self.fc_layers)):
-            dec_output, dec_slf_attn = dec_layer(dec_output, w, mask=mask, slf_attn_mask=slf_attn_mask)#Style vector 반영
+            dec_output, dec_slf_attn = dec_layer(dec_output, w, mask=mask, slf_attn_mask=slf_attn_mask)#Style vector
             mel_iters.append(linear(dec_output).masked_fill(mask.unsqueeze(-1), 0))
 
         return mel_iters, mask
-
-
-# class VarianceAdaptor(nn.Module):
-
-# class LengthRegulator(nn.Module):
-
-# class VariancePredictor(nn.Module):
-
-# class Conv(nn.Module):
-
 
 
 class Generator(nn.Module):
@@ -463,7 +319,6 @@ class Generator(nn.Module):
         )
 
         self.layer_stack = nn.ModuleList([
-            #SALNFFTBlock(d_model, d_w, n_head, d_k, d_v, d_inner, kernel_size, dropout=dropout)
             FFTBlock(d_model, n_head, d_k, d_v, d_inner, kernel_size, dropout=dropout, query_projection=query_projection)
             for _ in range(n_layers)
         ])
@@ -493,8 +348,6 @@ class Generator(nn.Module):
 
 
 class VarianceAdaptor(nn.Module):
-    """ Variance Adaptor """
-
     def __init__(self, preprocess_config, model_config):
         super(VarianceAdaptor, self).__init__()
         self.duration_predictor = VariancePredictor(model_config)
@@ -526,7 +379,7 @@ class VarianceAdaptor(nn.Module):
                 (torch.round(torch.exp(log_duration_prediction) - 1) * d_control),
                 min=0,
             )
-            x, mel_len = self.length_regulator(x, duration_rounded, None)#max_len)
+            x, mel_len = self.length_regulator(x, duration_rounded, None)
             mel_mask = get_mask_from_lengths(mel_len)
         return x, duration_rounded, mel_len, mel_mask
 
@@ -536,17 +389,14 @@ class VarianceAdaptor(nn.Module):
         pitch_target=None, duration_target=None,
         p_control=1.0, d_control=1.0
     ):
-        #upsampled_text = None
-        #print("duration target 없지 않나", duration_target)
         log_duration_prediction = self.duration_predictor(x, src_mask)
         pitch_prediction, pitch_embedding = self.get_pitch_embedding(
             x, pitch_target, src_mask, p_control
         )
-        #print("style vec shape : ", speaker_embedding.size())
-        #print("pitch emb shape : ", pitch_embedding.size())
+
         if speaker_embedding is not None:
-            pitch_embedding = pitch_embedding + speaker_embedding# style vector로?
-        #### 여기까지는 417 맞음
+            pitch_embedding = pitch_embedding + speaker_embedding # style vector
+
         x, duration_rounded, mel_len, mel_mask = self.upsample(
             torch.cat([x, pitch_embedding], dim=-1), mel_mask, max_len, \
                 log_duration_prediction=log_duration_prediction, duration_target=duration_target, d_control=d_control
@@ -565,8 +415,6 @@ class VarianceAdaptor(nn.Module):
         )
 
 class LengthRegulator(nn.Module):
-    """ Length Regulator """
-
     def __init__(self):
         super(LengthRegulator, self).__init__()
 
@@ -602,7 +450,7 @@ class LengthRegulator(nn.Module):
 
 
 class VariancePredictor(nn.Module):
-    """ Duration, Pitch and Energy Predictor """
+    """ Duration, Pitch Predictor """
 
     def __init__(self, model_config):
         super(VariancePredictor, self).__init__()
@@ -747,7 +595,6 @@ class StyleDiscriminator(nn.Module):
         self.w_b_0 = FCBlock(1, 1, bias=True)
 
     def forward(self, style_prototype, speakers, mel, mask):
-        #mel=mel[0]#[torch(~~)] 이런 형태여서 Fixed it!!
         max_len = mel.shape[1]
         slf_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1)
 

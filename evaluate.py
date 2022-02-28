@@ -15,7 +15,7 @@ from dataset import Dataset
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def evaluate(model, step, configs, logger=None, vocoder=None, loss_len=5):#SS : loss_len=4
+def evaluate(model, step, configs, logger=None, vocoder=None, loss_len=5):
     preprocess_config, model_config, train_config = configs
 
     # Get dataset
@@ -31,7 +31,7 @@ def evaluate(model, step, configs, logger=None, vocoder=None, loss_len=5):#SS : 
     )
 
     # Get loss function
-    Loss = StyleFormantLoss(preprocess_config, model_config, train_config).to(device)#FPF : no train_config
+    Loss = StyleFormantLoss(preprocess_config, model_config, train_config).to(device)
 
     # Evaluation
     loss_sums = [0 for _ in range(loss_len)]
@@ -51,13 +51,13 @@ def evaluate(model, step, configs, logger=None, vocoder=None, loss_len=5):#SS : 
     loss_means = [loss_sum / len(dataset) for loss_sum in loss_sums]
 
     message = "Validation Step {}, Total Loss: {:.4f}, Mel Loss: {:.4f}, Pitch Loss: {:.4f}, Duration Loss: {:.4f}".format(
-        *([step] + [l for l in loss_means[:4]])#SS : Energy Loss: {:.4f}, loss_mean[:5]
+        *([step] + [l for l in loss_means[:4]])
     )
 
     if logger is not None:
         fig, wav_reconstruction, wav_prediction, tag = synth_one_sample(
             batch,
-            output[2:],##output in FPF
+            output[2:],
             vocoder,
             model_config,
             preprocess_config,
@@ -84,39 +84,3 @@ def evaluate(model, step, configs, logger=None, vocoder=None, loss_len=5):#SS : 
         )
 
     return message
-
-#Only in FPF
-"""
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--restore_step", type=int, default=30000)
-    parser.add_argument(
-        "-p",
-        "--preprocess_config",
-        type=str,
-        required=True,
-        help="path to preprocess.yaml",
-    )
-    parser.add_argument(
-        "-m", "--model_config", type=str, required=True, help="path to model.yaml"
-    )
-    parser.add_argument(
-        "-t", "--train_config", type=str, required=True, help="path to train.yaml"
-    )
-    args = parser.parse_args()
-
-    # Read Config
-    preprocess_config = yaml.load(
-        open(args.preprocess_config, "r"), Loader=yaml.FullLoader
-    )
-    model_config = yaml.load(open(args.model_config, "r"), Loader=yaml.FullLoader)
-    train_config = yaml.load(open(args.train_config, "r"), Loader=yaml.FullLoader)
-    configs = (preprocess_config, model_config, train_config)
-
-    # Get model
-    model = get_model(args, configs, device, train=False).to(device)
-
-    message = evaluate(model, args.restore_step, configs)
-    print(message)
-"""

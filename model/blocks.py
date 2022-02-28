@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 from torch.nn import functional as F
 
+# Mish Activation
 class Mish(nn.Module):
     def forward(self, x):
         return x * torch.tanh(F.softplus(x))
@@ -33,7 +34,7 @@ class StyleAdaptiveLayerNorm(nn.Module):
 
         return o
 
-# SS
+# StyleSpeech Block
 class FCBlock(nn.Module):
     """ Fully Connected Block """
 
@@ -54,7 +55,8 @@ class FCBlock(nn.Module):
             x = F.dropout(x, self.dropout, self.training)
         return x
 
-# spectral normalization 부분만 다름. SS에 맞춤
+# Customized to StyleSpeech
+# spectral normalization 부분만 다름.
 class LinearNorm(nn.Module):
     """ LinearNorm Projection """
 
@@ -72,7 +74,8 @@ class LinearNorm(nn.Module):
         x = self.linear(x)
         return x
 
-# spectral normalization 부분만 다름. SS에 맞춤
+# Customized to StyleSpeech
+# spectral normalization 부분만 다름.
 class Conv1DBlock(nn.Module):
     """ 1D Convolutional Block """
 
@@ -102,7 +105,8 @@ class Conv1DBlock(nn.Module):
 
         return x
 
-# spectral normalization 부분만 다름. SS에 맞춤
+# Customized to StyleSpeech
+# spectral normalization 부분만 다름. 
 class ConvNorm(nn.Module):
     """ 1D Convolution """
 
@@ -154,9 +158,7 @@ class SALNFFTBlock(nn.Module):
         return enc_output, enc_slf_attn
 
 
-class FFTBlock(nn.Module):#Used in 
-    #  FFT Block 
-
+class FFTBlock(nn.Module):
     def __init__(self, d_model, n_head, d_k, d_v, d_inner, kernel_size, dropout=0.1, query_projection=False):
         super(FFTBlock, self).__init__()
         self.slf_attn = MultiHeadAttention(n_head, d_model, d_k, d_v, dropout=dropout)
@@ -182,7 +184,6 @@ class FFTBlock(nn.Module):#Used in
 
 
 
-# same
 class MultiHeadAttention(nn.Module):
     """ Multi-Head Attention """
 
@@ -198,7 +199,7 @@ class MultiHeadAttention(nn.Module):
         self.w_vs = LinearNorm(d_model, n_head * d_v, spectral_norm = spectral_norm)
 
         self.attention = ScaledDotProductAttention(temperature=np.power(d_k, 0.5))
-        self.layer_norm = nn.LayerNorm(d_model)#### Kevin vs Keon 상충됨 없는게 맞을 듯...
+        self.layer_norm = nn.LayerNorm(d_model)
 
         self.fc = LinearNorm(n_head * d_v, d_model)
 
@@ -229,13 +230,12 @@ class MultiHeadAttention(nn.Module):
         output = self.dropout(self.fc(output))
         output = output + residual
 
-        # FFT의 Add & Norm
+        # Add & Norm of FFT
         if self.layer_norm is not None:
-            output = self.layer_norm(output)#### Kevin vs Keon 상충됨 없는게 맞을 듯...
+            output = self.layer_norm(output)
 
         return output, attn
 
-# same
 class ScaledDotProductAttention(nn.Module):
     """ Scaled Dot-Product Attention """
 
@@ -257,7 +257,7 @@ class ScaledDotProductAttention(nn.Module):
 
         return output, attn
 
-## SS에 맞춤
+## Customized to StyleSpeech
 class PositionwiseFeedForward(nn.Module):
     """ A two-feed-forward-layer """
 

@@ -23,8 +23,5 @@ preprocessing:
     mel_fmin: 0
     mel_fmax: 8000 # please set to 8000 for HiFi-GAN vocoder, set to null for MelGAN vocoder
   pitch:
-    feature: "phoneme_level" # FPF는 only 'phoneme level', SS는 'phoneme_level' or 'frame_level'
+    feature: "phoneme_level"
     normalization: True
-#  energy:
-#    feature: "phoneme_level" # support 'phoneme_level' or 'frame_level'
-#    normalization: True

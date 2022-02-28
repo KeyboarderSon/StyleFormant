@@ -12,12 +12,13 @@ matplotlib.use("Agg")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# dataset.py와 관련있음
+""" About dataset.py """
+# energy omitted
 def to_device(data, device):
     # SS
     if len(data) == 16:
         (ids, raw_texts, speakers, texts, src_lens, max_src_len, \
-            mels, mel_lens, max_mel_len, pitches, #energies, 
+            mels, mel_lens, max_mel_len, pitches,
             durations, 
             raw_quary_texts, quary_texts, quary_src_lens, max_quary_src_len, quary_durations) = data
 
@@ -29,13 +30,11 @@ def to_device(data, device):
         mels = torch.from_numpy(mels).float().to(device)
         mel_lens = torch.from_numpy(mel_lens).to(device)
         pitches = torch.from_numpy(pitches).float().to(device)
-        #energies = torch.from_numpy(energies).to(device)
         durations = torch.from_numpy(durations).long().to(device)
         quary_durations = torch.from_numpy(quary_durations).long().to(device)
 
         return (ids, raw_texts, speakers, texts, src_lens, max_src_len, 
-            mels, mel_lens, max_mel_len, pitches, #energies,
-            durations, 
+            mels, mel_lens, max_mel_len, pitches, durations, 
             raw_quary_texts, quary_texts, quary_src_lens, max_quary_src_len, quary_durations)
     
     # FPF
@@ -79,12 +78,7 @@ def log(logger, step=None, losses=None, fig=None, audio=None, sampling_rate=2205
         logger.add_scalar("Loss/total_loss", losses[0], step)
         logger.add_scalar("Loss/mel_loss", losses[1], step)
         logger.add_scalar("Loss/pitch_loss", losses[2], step)
-        #logger.add_scalar("Loss/energy_loss", losses[3], step)
-        
-        
         logger.add_scalar("Loss/duration_loss", losses[3], step)
-        
-        # SS
         logger.add_scalar("Loss/adv_D_s_loss", losses[4], step)
         logger.add_scalar("Loss/adv_D_t_loss", losses[5], step)
         logger.add_scalar("Loss/D_s_loss", losses[6], step)
@@ -115,29 +109,23 @@ def expand(values, durations):
         out += [value] * max(0, int(d))
     return np.array(out)
 
-# ******* mel prediction과 prediction 몇번째 idx인지 ... 
 def synth_one_sample(targets, predictions, vocoder, model_config, preprocess_config):
     basename = targets[0][0]
-    src_len = predictions[6][0].item()#SS는 [7]
-    mel_len = predictions[7][0].item()#SS는 [8]
+    src_len = predictions[6][0].item()
+    mel_len = predictions[7][0].item()
     mel_target = targets[6][0, :mel_len].detach().transpose(0, 1)
     
-    ########### 둘 중 뭘까??? ############
+
     mel_prediction = predictions[0][-1][0, :mel_len].detach().transpose(0, 1) # pick the last iteration
-    #mel_prediction = predictions[0][0, :mel_len].detach().transpose(0, 1) # SS
-    duration = targets[10][0, :src_len].detach().cpu().numpy()# [11]
+    duration = targets[10][0, :src_len].detach().cpu().numpy()# SS is [11]
 
-    # 원래는 frame_level, phoneme_level별로 다름. FPF는 phoneme_level only라서 if else 쓰지 x
     pitch = targets[9][0, :src_len].detach().cpu().numpy()
-    pitch = expand(pitch, duration) # phoneme당 pitch를 duration 값만큼 expand
-
-    # energy 부분도 SS는 있다....
+    pitch = expand(pitch, duration) # expand pitch per phoneme by multiplying duration
 
     with open(os.path.join(preprocess_config["path"]["preprocessed_path"], "stats.json")) as f:
         stats = json.load(f)
-        stats = stats["pitch"] # + stats["energy"][:2]
+        stats = stats["pitch"]
     
-    #여기도 energy 빠져있음 FPF에 맞춰
     fig = plot_mel([(mel_prediction.cpu().numpy(), pitch), (mel_target.cpu().numpy(), pitch)],
             stats, ["Synthetized Spectrogram", "Ground-Truth Spectrogram"])
 
@@ -161,24 +149,21 @@ def synth_one_sample(targets, predictions, vocoder, model_config, preprocess_con
 
 def synth_samples(targets, predictions, vocoder, model_config, preprocess_config, path):
     basenames = targets[0]
-    for i in range(len(targets[0])):#SS는 predictions[0]....
+    for i in range(len(targets[0])):
         basename = basenames[i]
-        src_len = predictions[6][i].item()#SS :[7]
-        mel_len = predictions[7][i].item()#SS :[8]
+        src_len = predictions[6][i].item()
+        mel_len = predictions[7][i].item()
         mel_prediction = predictions[0][-1][i, :mel_len].detach().transpose(0, 1) # pick the last iteration
-        duration = predictions[3][i, :src_len].detach().cpu().numpy()# SS : [4]
-
-        # phoneme level일 때. frame_level의 경우 빠져있음
+        duration = predictions[3][i, :src_len].detach().cpu().numpy()
         pitch = predictions[1][i, :src_len].detach().cpu().numpy()
         pitch = expand(pitch, duration)
 
         with open(os.path.join(preprocess_config["path"]["preprocessed_path"], "stats.json")) as f:
             stats = json.load(f)
-            stats = stats["pitch"]# + stats["energy"][:2]
+            stats = stats["pitch"]
 
-        # FPF에 맞춤
         fig = plot_mel([
-                        (mel_prediction.cpu().numpy(), pitch),# no energy
+                        (mel_prediction.cpu().numpy(), pitch),
                         targets[-1][i]
                         ],
                         stats, 
@@ -188,8 +173,8 @@ def synth_samples(targets, predictions, vocoder, model_config, preprocess_config
 
     from .model import vocoder_infer
 
-    mel_predictions = predictions[0][-1].transpose(1, 2)#SS는 no [-1]
-    lengths = predictions[7] * preprocess_config["preprocessing"]["stft"]["hop_length"]#SS는 [8]
+    mel_predictions = predictions[0][-1].transpose(1, 2)
+    lengths = predictions[7] * preprocess_config["preprocessing"]["stft"]["hop_length"]
     wav_predictions = vocoder_infer(
         mel_predictions, vocoder, model_config, preprocess_config, lengths=lengths
     )
@@ -204,7 +189,7 @@ def plot_mel(data, stats, titles):
     fig, axes = plt.subplots(len(data), 1, squeeze=False)
     if titles is None:
         titles = [None for i in range(len(data))]
-    pitch_min, pitch_max, pitch_mean, pitch_std = stats # energy_min, energy_max
+    pitch_min, pitch_max, pitch_mean, pitch_std = stats
     pitch_min = pitch_min * pitch_std + pitch_mean
     pitch_max = pitch_max * pitch_std + pitch_mean
 
@@ -231,23 +216,6 @@ def plot_mel(data, stats, titles):
         ax1.tick_params(
             labelsize="x-small", colors="tomato", bottom=False, labelbottom=False
         )
-
-        # ax2 = add_axis(fig, axes[i][0])
-        # ax2.plot(energy, color="darkviolet", linewidth=.7)
-        # ax2.set_xlim(0, mel.shape[1])
-        # ax2.set_ylim(energy_min, energy_max)
-        # ax2.set_ylabel("Energy", color="darkviolet")
-        # ax2.yaxis.set_label_position("right")
-        # ax2.tick_params(
-        #     labelsize="x-small",
-        #     colors="darkviolet",
-        #     bottom=False,
-        #     labelbottom=False,
-        #     left=False,
-        #     labelleft=False,
-        #     right=True,
-        #     labelright=True,
-        # )
 
     return fig
 

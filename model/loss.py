@@ -5,37 +5,20 @@ import numpy as np
 class StyleFormantLoss(nn.Module):
     """ Loss """
 
-    def __init__(self, preprocess_config, model_config , train_config):#, train_config : SS, 없으면 FPF
+    def __init__(self, preprocess_config, model_config , train_config):
         super(StyleFormantLoss, self).__init__()
         self.pitch_feature_level = preprocess_config["preprocessing"]["pitch"]["feature"]
         self.n_mel_channels = preprocess_config["preprocessing"]["mel"]["n_mel_channels"]
         self.mse_loss_sum = nn.MSELoss(reduction='sum')
         self.alpha = train_config["optimizer"]["alpha"]
         self.mse_loss = nn.MSELoss()
-        # self.mae_loss = nn.L1Loss()
 
     def forward(self, inputs, predictions):
-        # print("inputs type", type(inputs))
-        # print("list(inputs) type", type(list(inputs)))
-        # #SS without E
-        # print("input size is,")
-        # print(torch.Tensor.cpu((np.array(list(inputs))).size))
-
-
-        # (
-        #     mel_targets,
-        #     mel_lens_targets,
-        #     _,
-        #     pitch_targets,
-        #     duration_targets,
-        # ) = inputs[6:]
-        
         (
             mel_targets,
             mel_lens_targets,
             _,
             pitch_targets,
-            #energy_targets,
             duration_targets,
             _,
             _,
@@ -44,10 +27,7 @@ class StyleFormantLoss(nn.Module):
             _,
         ) = inputs[6:]
 
-
-
-
-
+        # 2 Discriminator, Predicted Output
         (
             D_s,
             D_t,
@@ -61,25 +41,6 @@ class StyleFormantLoss(nn.Module):
             _,
         ) = predictions
         
-        """FPF
-               (
-            mel_targets,
-            mel_lens_targets,
-            _,
-            pitch_targets,
-            duration_targets,
-        ) = inputs[6:]
-        (
-            mel_iters,
-            pitch_predictions,
-            log_duration_predictions,
-            _,
-            src_masks,
-            mel_masks,
-            _,
-            _,
-        ) = predictions
-        """
         src_masks = ~src_masks
         mel_masks = ~mel_masks
         log_duration_targets = torch.log(duration_targets.float() + 1)
@@ -89,7 +50,7 @@ class StyleFormantLoss(nn.Module):
         log_duration_targets.requires_grad = False
         pitch_targets.requires_grad = False
         mel_targets.requires_grad = False
-        mel_lens_targets.requires_grad = False # only in FPF
+        mel_lens_targets.requires_grad = False # in FPF
 
         pitch_predictions = pitch_predictions.masked_select(src_masks)
         pitch_targets = pitch_targets.masked_select(src_masks)
@@ -97,7 +58,6 @@ class StyleFormantLoss(nn.Module):
         log_duration_predictions = log_duration_predictions.masked_select(src_masks)
         log_duration_targets = log_duration_targets.masked_select(src_masks)
 
-        #mel_predictions = mel_predictions.masked_select(mel_masks.unsqueeze(-1))#SS
         mel_targets = mel_targets.masked_select(mel_masks.unsqueeze(-1))
 
         mel_loss = 0
@@ -106,7 +66,6 @@ class StyleFormantLoss(nn.Module):
             mel_loss += self.mse_loss_sum(mel_predictions, mel_targets)
         mel_loss = (mel_loss / (self.n_mel_channels * mel_lens_targets)).mean()
         
-        #mel_loss = self.mae_loss(mel_predictions, mel_targets)#SS
 
         pitch_loss = self.mse_loss(pitch_predictions, pitch_targets)
         duration_loss = self.mse_loss(log_duration_predictions, log_duration_targets)
@@ -133,7 +92,6 @@ class MetaLossDisc(nn.Module):
     def __init__(self, preprocess_config, model_config):
         super(MetaLossDisc, self).__init__()
         self.pitch_feature_level = preprocess_config["preprocessing"]["pitch"]["feature"]
-        #self.energy_feature_level = preprocess_config["preprocessing"]["energy"]["feature"]
         self.mse_loss = nn.MSELoss()
         self.mae_loss = nn.L1Loss()
         self.cross_entropy_loss = nn.CrossEntropyLoss()

@@ -43,8 +43,6 @@ def get_param_num(model):
     return num_param
 
 
-
-# All same
 def get_vocoder(config, device):
     name = config["vocoder"]["model"]
     speaker = config["vocoder"]["speaker"]
